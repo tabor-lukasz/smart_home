@@ -10,6 +10,8 @@ use crate::{
 };
 
 pub struct ControlService {
+    // Intentionally retained for when control logic sends commands to Tuya.
+    #[allow(dead_code)]
     tuya: TuyaClient,
     cache: ReadingCache,
     interval: Duration,
@@ -71,8 +73,9 @@ impl ControlService {
                 "Control iteration — latest readings"
             );
 
-            // TODO: Implement real control logic here.
-            // Example pattern:
+            // Control logic goes here.
+            // self.tuya.send_commands(device_id, vec![...]).await?;
+            // Example: thermostat — compare temperature vs setpoint and toggle relay.
             //   let setpoint = device_readings.iter()
             //       .find(|r| r.sensor_type == SensorType::TemperatureSetpoint)
             //       .map(|r| r.value as f64 / 100.0);
@@ -82,7 +85,6 @@ impl ControlService {
             //           Command { code: "switch_1".into(), value: should_heat.into() },
             //       ]).await?;
             //   }
-            let _ = &self.tuya; // will be used by real control logic
         }
 
         Ok(())
