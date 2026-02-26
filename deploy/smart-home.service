@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Home Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/smart_home
+EnvironmentFile=/home/pi/smart_home/.env
+ExecStart=/home/pi/smart_home/smart_home_service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
