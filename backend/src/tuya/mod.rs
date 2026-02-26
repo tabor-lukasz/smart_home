@@ -12,7 +12,8 @@ use uuid::Uuid;
 use crate::{config::Config, response_store};
 
 use self::models::{
-    Command, DeviceStatusResponse, SendCommandRequest, SendCommandResponse, TokenResponse,
+    Command, DeviceProperty, DeviceStatusResponse, SendCommandRequest, SendCommandResponse,
+    ShadowPropertiesResponse, ShadowProperty, TokenResponse, TokenResult,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -65,18 +66,18 @@ impl TuyaClient {
 
         info!("Fetching new Tuya access token");
         let token = self.fetch_token().await?;
-        let expires_at = now + token.result.expire_time;
-        let access_token = token.result.access_token.clone();
+        let expires_at = now + token.expire_time;
+        let access_token = token.access_token.clone();
 
         *guard = Some(CachedToken {
-            access_token: token.result.access_token,
+            access_token: token.access_token,
             expires_at,
         });
 
         Ok(access_token)
     }
 
-    async fn fetch_token(&self) -> Result<TokenResponse> {
+    async fn fetch_token(&self) -> Result<TokenResult> {
         let path = "/v1.0/token?grant_type=1";
         let url = format!("{}{}", self.inner.base_url, path);
         debug!(url = %url, "Requesting Tuya token");
@@ -107,13 +108,15 @@ impl TuyaClient {
         response_store::save("token", "", &bytes).await;
 
         let resp = serde_json::from_slice::<TokenResponse>(&bytes)
-            .context("Failed to deserialize Tuya token response")?;
+            .context("Failed to deserialize Tuya token response")?
+            .into_result()
+            .context("Tuya token API call failed")?;
 
         Ok(resp)
     }
 
     /// Fetch all data-point (DP) properties for a device.
-    pub async fn get_device_status(&self, device_id: &str) -> Result<DeviceStatusResponse> {
+    pub async fn get_device_status(&self, device_id: &str) -> Result<Vec<DeviceProperty>> {
         let token = self.access_token().await?;
         let path = format!("/v1.0/devices/{}/status", device_id);
         let url = format!("{}{}", self.inner.base_url, path);
@@ -145,7 +148,9 @@ impl TuyaClient {
         response_store::save("device_status", device_id, &bytes).await;
 
         let resp = serde_json::from_slice::<DeviceStatusResponse>(&bytes)
-            .context("Failed to deserialize Tuya device status response")?;
+            .context("Failed to deserialize Tuya device status response")?
+            .into_result()
+            .context("Tuya device status API call failed")?;
 
         Ok(resp)
     }
@@ -155,7 +160,7 @@ impl TuyaClient {
         &self,
         device_id: &str,
         commands: Vec<Command>,
-    ) -> Result<SendCommandResponse> {
+    ) -> Result<bool> {
         let token = self.access_token().await?;
         let path = format!("/v1.0/devices/{}/commands", device_id);
         let url = format!("{}{}", self.inner.base_url, path);
@@ -191,9 +196,57 @@ impl TuyaClient {
         response_store::save("send_commands", device_id, &bytes).await;
 
         let resp = serde_json::from_slice::<SendCommandResponse>(&bytes)
-            .context("Failed to deserialize Tuya send_commands response")?;
+            .context("Failed to deserialize Tuya send_commands response")?
+            .into_result()
+            .context("Tuya send_commands API call failed")?;
 
         Ok(resp)
+    }
+
+    /// Fetch shadow properties for a device using the v2 IoT Core endpoint.
+    ///
+    /// Used for devices (e.g. weather stations) that return error 2003 on the
+    /// standard v1 `/devices/{id}/status` endpoint.
+    pub async fn get_weather_station_status(
+        &self,
+        device_id: &str,
+    ) -> Result<Vec<ShadowProperty>> {
+        let token = self.access_token().await?;
+        let path = format!("/v2.0/cloud/thing/{}/shadow/properties", device_id);
+        let url = format!("{}{}", self.inner.base_url, path);
+        debug!(device_id = %device_id, url = %url, "Fetching weather station shadow properties");
+
+        let headers = build_signed_headers(
+            "GET",
+            &path,
+            &[],
+            &self.inner.client_id,
+            &self.inner.client_secret,
+            Some(&token),
+        );
+
+        let bytes = self
+            .inner
+            .http
+            .get(&url)
+            .headers(to_header_map(headers)?)
+            .send()
+            .await
+            .context("Tuya get_weather_station_status request failed")?
+            .error_for_status()
+            .context("Tuya shadow properties endpoint returned error status")?
+            .bytes()
+            .await
+            .context("Failed to read Tuya shadow properties response body")?;
+
+        response_store::save("weather_station", device_id, &bytes).await;
+
+        let resp = serde_json::from_slice::<ShadowPropertiesResponse>(&bytes)
+            .context("Failed to deserialize Tuya shadow properties response")?
+            .into_result()
+            .context("Tuya shadow properties API call failed")?;
+
+        Ok(resp.properties)
     }
 }
 

@@ -44,17 +44,17 @@ async fn main() -> Result<()> {
         let pool = pool.clone();
         let tuya = tuya.clone();
         let cache = cache.clone();
-        let device_ids = config.tuya_device_ids.clone();
+        let device_ids = config.device_ids.clone();
         let interval = Duration::from_secs(config.poll_interval_secs);
 
         tokio::spawn(async move {
-            let service = SensorService::new(pool, tuya, cache);
+            let service = SensorService::new(pool, tuya, cache, device_ids);
             let mut ticker = time::interval(interval);
             info!(interval_secs = interval.as_secs(), "Sensor polling loop started");
 
             loop {
                 ticker.tick().await;
-                for device_id in &device_ids {
+                for device_id in service.device_ids() {
                     if let Err(e) = service.fetch_and_persist(device_id).await {
                         tracing::error!(device_id = %device_id, error = %e, "Failed to fetch sensor reading");
                     }

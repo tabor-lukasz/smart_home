@@ -4,7 +4,14 @@ CREATE TYPE sensor_type AS ENUM (
     'door_open',
     'power_consumption',
     'relay_state',
-    'temperature_setpoint'
+    'temperature_setpoint',
+    -- Sub-sensor channels for weather stations with remote sensor probes
+    'sub1_temperature',
+    'sub1_humidity',
+    'sub2_temperature',
+    'sub2_humidity',
+    'sub3_temperature',
+    'sub3_humidity'
 );
 
 -- Value encoding convention:

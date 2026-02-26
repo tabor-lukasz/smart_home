@@ -16,12 +16,21 @@ use uuid::Uuid;
 #[sqlx(type_name = "sensor_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum SensorType {
+    // Core sensors
     Temperature,
     Humidity,
     DoorOpen,
     PowerConsumption,
     RelayState,
     TemperatureSetpoint,
+
+    // Weather station sub-sensor channels (remote sensors 1–3)
+    Sub1Temperature,
+    Sub1Humidity,
+    Sub2Temperature,
+    Sub2Humidity,
+    Sub3Temperature,
+    Sub3Humidity,
 }
 
 impl fmt::Display for SensorType {
@@ -33,6 +42,12 @@ impl fmt::Display for SensorType {
             SensorType::PowerConsumption => "power_consumption",
             SensorType::RelayState => "relay_state",
             SensorType::TemperatureSetpoint => "temperature_setpoint",
+            SensorType::Sub1Temperature => "sub1_temperature",
+            SensorType::Sub1Humidity => "sub1_humidity",
+            SensorType::Sub2Temperature => "sub2_temperature",
+            SensorType::Sub2Humidity => "sub2_humidity",
+            SensorType::Sub3Temperature => "sub3_temperature",
+            SensorType::Sub3Humidity => "sub3_humidity",
         };
         f.write_str(s)
     }

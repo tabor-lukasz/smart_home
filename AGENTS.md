@@ -251,7 +251,7 @@ CREATE TABLE sensor_readings (
 | `TUYA_BASE_URL` | Tuya API base URL (region-specific) |
 | `SERVER_HOST` | Bind address (default `0.0.0.0`) |
 | `SERVER_PORT` | Bind port (default `8080`) |
-| `TUYA_DEVICE_IDS` | Comma-separated list of device IDs to poll |
+| `TUYA_DEVICE_IDS` | Comma-separated `device_id:device_type` pairs (e.g. `abc:thermostat,def:energy_meter`) |
 | `POLL_INTERVAL_SECS` | Sensor polling interval in seconds (default `60`) |
 | `CONTROL_INTERVAL_SECS` | Control loop interval in seconds (default `30`) |
 | `RUST_LOG` | Tracing filter (e.g. `info,sqlx=warn`) |
