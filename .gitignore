@@ -8,6 +8,7 @@
 
 # Build output
 /backend/target/
+/target/
 
 # sqlx offline query cache (commit this if you want offline builds in CI)
 # /backend/.sqlx/
