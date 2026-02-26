@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# direnv
+.direnv/
+
+# Build output
+/target/
+
+# sqlx offline query cache (commit this if you want offline builds in CI)
+# .sqlx/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
