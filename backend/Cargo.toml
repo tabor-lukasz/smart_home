@@ -1,5 +1,5 @@
 [package]
-name = "smart_home_backend_ai"
+name = "smart_home_service"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,6 +19,14 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+[[bin]]
+name = "smart_home_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

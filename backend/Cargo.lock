@@ -2006,7 +2006,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "smart_home_backend_ai"
+name = "smart_home_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",

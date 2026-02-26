@@ -1,20 +1,14 @@
-mod api;
-mod config;
-mod control;
-mod db;
-mod reading_cache;
-mod sensors;
-mod tuya;
-
 use anyhow::Result;
 use std::time::Duration;
 use tokio::{net::TcpListener, signal, time};
 use tracing::info;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use crate::{
+use smart_home_service::{
+    api,
     config::Config,
     control::ControlService,
+    db,
     reading_cache::ReadingCache,
     sensors::SensorService,
     tuya::TuyaClient,
