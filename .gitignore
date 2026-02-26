@@ -23,3 +23,6 @@
 .vscode/
 *.swp
 .DS_Store
+
+# rust-analyzer background check output
+/backend/target/flycheck*/

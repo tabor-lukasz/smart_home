@@ -2,7 +2,7 @@ pub mod dto;
 pub mod errors;
 pub mod handlers;
 
-use axum::{routing::get, Router};
+use axum::{routing::{get, post}, Router};
 use sqlx::PgPool;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -12,6 +12,7 @@ use handlers::ApiDoc;
 pub fn router(pool: PgPool) -> Router {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .route("/sensors/latest", get(handlers::get_latest_readings))
+        .route("/sensors/readings", post(handlers::get_readings_multi))
         .route(
             "/sensors/{device_id}/{sensor_type}",
             get(handlers::get_sensor_readings),

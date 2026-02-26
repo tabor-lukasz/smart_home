@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -7,7 +9,10 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use utoipa::OpenApi;
 
-use super::{dto::SensorReadingDto, errors::AppError};
+use super::{
+    dto::{SensorReadingDto, SensorReadingsRequest, SensorReadingsResponse},
+    errors::AppError,
+};
 use crate::db::models::{SensorReading, SensorType};
 
 // ---------------------------------------------------------------------------
@@ -147,6 +152,56 @@ pub async fn get_sensor_latest(
     Ok(Json(row.map(Into::into)))
 }
 
+/// Fetch readings for multiple devices and sensor types over an optional time range.
+///
+/// Returns a nested map: `device_id → sensor_type → [readings]`, ordered by `recorded_at ASC`.
+#[utoipa::path(
+    post,
+    path = "/sensors/readings",
+    request_body = SensorReadingsRequest,
+    responses(
+        (status = 200, description = "Readings grouped by device_id and sensor_type"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "sensors"
+)]
+pub async fn get_readings_multi(
+    State(pool): State<PgPool>,
+    Json(body): Json<SensorReadingsRequest>,
+) -> Result<Json<SensorReadingsResponse>, AppError> {
+    let rows = sqlx::query_as!(
+        SensorReading,
+        r#"
+        SELECT id,
+               device_id,
+               sensor_type AS "sensor_type: SensorType",
+               recorded_at,
+               value
+        FROM sensor_readings
+        WHERE device_id   = ANY($1)
+          AND sensor_type = ANY($2::sensor_type[])
+          AND ($3::timestamptz IS NULL OR recorded_at >= $3)
+          AND ($4::timestamptz IS NULL OR recorded_at <= $4)
+        ORDER BY device_id, sensor_type, recorded_at ASC
+        "#,
+        &body.device_ids,
+        body.sensor_types as Vec<SensorType>,
+        body.from,
+        body.to,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    let mut response: SensorReadingsResponse = BTreeMap::new();
+    for row in rows {
+        let device_entry = response.entry(row.device_id.clone()).or_default();
+        let type_key = row.sensor_type.to_string();
+        device_entry.entry(type_key).or_default().push(row.into());
+    }
+
+    Ok(Json(response))
+}
+
 // ---------------------------------------------------------------------------
 // Health check
 // ---------------------------------------------------------------------------
@@ -170,8 +225,8 @@ pub async fn health() -> axum::Json<serde_json::Value> {
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(get_latest_readings, get_sensor_readings, get_sensor_latest, health),
-    components(schemas(SensorReadingDto, SensorType)),
+    paths(get_latest_readings, get_sensor_readings, get_sensor_latest, get_readings_multi, health),
+    components(schemas(SensorReadingDto, SensorType, SensorReadingsRequest)),
     tags(
         (name = "sensors", description = "Sensor reading endpoints"),
         (name = "system",  description = "System endpoints"),
@@ -336,6 +391,117 @@ mod tests {
         assert_eq!(body["value"], 2999);
         assert_eq!(body["device_id"], "dev1");
         assert_eq!(body["sensor_type"], "temperature");
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /sensors/readings
+    // -----------------------------------------------------------------------
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn readings_multi_empty_db_returns_empty_map(pool: PgPool) {
+        let server = test_server(pool);
+        let resp = server
+            .post("/sensors/readings")
+            .json(&serde_json::json!({
+                "device_ids":   ["dev1"],
+                "sensor_types": ["temperature"]
+            }))
+            .await;
+        resp.assert_status_ok();
+        let body: Value = resp.json();
+        assert_eq!(body, serde_json::json!({}));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn readings_multi_groups_by_device_and_type(pool: PgPool) {
+        insert_reading(&pool, "dev1", "temperature", 2000).await;
+        insert_reading(&pool, "dev1", "humidity", 6000).await;
+        insert_reading(&pool, "dev2", "temperature", 3000).await;
+
+        let server = test_server(pool);
+        let resp = server
+            .post("/sensors/readings")
+            .json(&serde_json::json!({
+                "device_ids":   ["dev1", "dev2"],
+                "sensor_types": ["temperature", "humidity"]
+            }))
+            .await;
+        resp.assert_status_ok();
+
+        let body: Value = resp.json();
+        assert_eq!(body["dev1"]["temperature"][0]["value"], 2000);
+        assert_eq!(body["dev1"]["humidity"][0]["value"], 6000);
+        assert_eq!(body["dev2"]["temperature"][0]["value"], 3000);
+        assert!(body["dev2"]["humidity"].is_null() || body["dev2"].get("humidity").is_none());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn readings_multi_excludes_unrequested_sensor_types(pool: PgPool) {
+        insert_reading(&pool, "dev1", "temperature", 2000).await;
+        insert_reading(&pool, "dev1", "humidity", 6000).await;
+
+        let server = test_server(pool);
+        let resp = server
+            .post("/sensors/readings")
+            .json(&serde_json::json!({
+                "device_ids":   ["dev1"],
+                "sensor_types": ["temperature"]
+            }))
+            .await;
+        resp.assert_status_ok();
+
+        let body: Value = resp.json();
+        assert!(body["dev1"]["temperature"].is_array());
+        assert!(body["dev1"].get("humidity").is_none());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn readings_multi_excludes_unrequested_devices(pool: PgPool) {
+        insert_reading(&pool, "dev1", "temperature", 2000).await;
+        insert_reading(&pool, "dev2", "temperature", 3000).await;
+
+        let server = test_server(pool);
+        let resp = server
+            .post("/sensors/readings")
+            .json(&serde_json::json!({
+                "device_ids":   ["dev1"],
+                "sensor_types": ["temperature"]
+            }))
+            .await;
+        resp.assert_status_ok();
+
+        let body: Value = resp.json();
+        assert!(body["dev1"].is_object());
+        assert!(body.get("dev2").is_none());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn readings_multi_readings_ordered_asc(pool: PgPool) {
+        insert_reading(&pool, "dev1", "temperature", 2000).await;
+        insert_reading(&pool, "dev1", "temperature", 2100).await;
+        insert_reading(&pool, "dev1", "temperature", 2200).await;
+
+        let server = test_server(pool);
+        let resp = server
+            .post("/sensors/readings")
+            .json(&serde_json::json!({
+                "device_ids":   ["dev1"],
+                "sensor_types": ["temperature"]
+            }))
+            .await;
+        resp.assert_status_ok();
+
+        let body: Value = resp.json();
+        let readings = body["dev1"]["temperature"].as_array().unwrap();
+        assert_eq!(readings.len(), 3);
+        assert!(
+            readings[0]["recorded_at"].as_str().unwrap()
+                <= readings[1]["recorded_at"].as_str().unwrap()
+        );
+        assert!(
+            readings[1]["recorded_at"].as_str().unwrap()
+                <= readings[2]["recorded_at"].as_str().unwrap()
+        );
     }
 
     // -----------------------------------------------------------------------
