@@ -49,3 +49,11 @@ fn required(key: &str) -> Result<String> {
 fn optional(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_owned())
 }
+
+#[cfg(test)]
+mod tests {
+    // Config::from_env() reads from the process environment, which is shared
+    // across threads. Mutating env vars in tests is unsafe and unreliable.
+    // Config loading is exercised indirectly by the API integration tests
+    // (which require a valid DATABASE_URL to be present).
+}

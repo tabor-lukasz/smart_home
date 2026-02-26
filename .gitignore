@@ -7,10 +7,16 @@
 .direnv/
 
 # Build output
-/target/
+/backend/target/
 
 # sqlx offline query cache (commit this if you want offline builds in CI)
-# .sqlx/
+# /backend/.sqlx/
+
+# Frontend build output (placeholder for future framework)
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.next/
+/frontend/build/
 
 # Editor / OS
 .idea/

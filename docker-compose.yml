@@ -16,5 +16,22 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8080:8080"
+
+  # frontend:
+  #   build: ./frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   # Tech stack TBD — uncomment and configure when frontend is chosen.
+
 volumes:
   postgres_data:

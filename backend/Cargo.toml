@@ -22,3 +22,5 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+axum-test = "18"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "uuid", "chrono"] }
