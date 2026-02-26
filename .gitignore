@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Tuya raw response captures (local analysis only)
+backend/responses/
+
 # direnv
 .direnv/
 

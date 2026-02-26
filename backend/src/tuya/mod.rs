@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use crate::config::Config;
+use crate::{config::Config, response_store};
 
 use self::models::{
     Command, DeviceStatusResponse, SendCommandRequest, SendCommandResponse, TokenResponse,
@@ -90,7 +90,7 @@ impl TuyaClient {
             None,
         );
 
-        let resp = self
+        let bytes = self
             .inner
             .http
             .get(&url)
@@ -100,8 +100,13 @@ impl TuyaClient {
             .context("Tuya token request failed")?
             .error_for_status()
             .context("Tuya token endpoint returned error status")?
-            .json::<TokenResponse>()
+            .bytes()
             .await
+            .context("Failed to read Tuya token response body")?;
+
+        response_store::save("token", "", &bytes).await;
+
+        let resp = serde_json::from_slice::<TokenResponse>(&bytes)
             .context("Failed to deserialize Tuya token response")?;
 
         Ok(resp)
@@ -123,7 +128,7 @@ impl TuyaClient {
             Some(&token),
         );
 
-        let resp = self
+        let bytes = self
             .inner
             .http
             .get(&url)
@@ -133,8 +138,13 @@ impl TuyaClient {
             .context("Tuya get_device_status request failed")?
             .error_for_status()
             .context("Tuya device status endpoint returned error status")?
-            .json::<DeviceStatusResponse>()
+            .bytes()
             .await
+            .context("Failed to read Tuya device status response body")?;
+
+        response_store::save("device_status", device_id, &bytes).await;
+
+        let resp = serde_json::from_slice::<DeviceStatusResponse>(&bytes)
             .context("Failed to deserialize Tuya device status response")?;
 
         Ok(resp)
@@ -163,7 +173,7 @@ impl TuyaClient {
             Some(&token),
         );
 
-        let resp = self
+        let bytes = self
             .inner
             .http
             .post(&url)
@@ -174,8 +184,13 @@ impl TuyaClient {
             .context("Tuya send_commands request failed")?
             .error_for_status()
             .context("Tuya commands endpoint returned error status")?
-            .json::<SendCommandResponse>()
+            .bytes()
             .await
+            .context("Failed to read Tuya send_commands response body")?;
+
+        response_store::save("send_commands", device_id, &bytes).await;
+
+        let resp = serde_json::from_slice::<SendCommandResponse>(&bytes)
             .context("Failed to deserialize Tuya send_commands response")?;
 
         Ok(resp)
